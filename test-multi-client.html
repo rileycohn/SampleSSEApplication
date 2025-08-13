@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Client SSE Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .test-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .client-panel {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .client-panel h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+        }
+        
+        .controls input {
+            padding: 8px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .controls button {
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .controls button:hover {
+            background-color: #0056b3;
+        }
+        
+        .controls button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .events {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .event-item {
+            margin-bottom: 5px;
+            padding: 5px;
+            background-color: white;
+            border-radius: 3px;
+            border-left: 3px solid #007bff;
+        }
+        
+        .instructions {
+            background-color: #e7f3ff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .instructions h2 {
+            margin-top: 0;
+            color: #0056b3;
+        }
+        
+        .test-results {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="instructions">
+        <h2>Multi-Client SSE Testing</h2>
+        <p><strong>Test Instructions:</strong></p>
+        <ol>
+            <li>Make sure the SSE server is running on localhost:3000</li>
+            <li>Connect both clients to the same stream ID (e.g., "test1")</li>
+            <li>Verify both clients receive identical events at the same time</li>
+            <li>Try connecting to different stream IDs to test isolation</li>
+            <li>Disconnect one client and verify the other continues receiving events</li>
+        </ol>
+    </div>
+    
+    <div class="test-container">
+        <div class="client-panel">
+            <h3>Client 1</h3>
+            <div class="controls">
+                <input type="text" id="streamId1" placeholder="Stream ID" value="test1" />
+                <button id="connectBtn1">Connect</button>
+                <button id="clearBtn1">Clear</button>
+            </div>
+            <div id="status1" class="status disconnected">Disconnected</div>
+            <div id="events1" class="events"></div>
+        </div>
+        
+        <div class="client-panel">
+            <h3>Client 2</h3>
+            <div class="controls">
+                <input type="text" id="streamId2" placeholder="Stream ID" value="test1" />
+                <button id="connectBtn2">Connect</button>
+                <button id="clearBtn2">Clear</button>
+            </div>
+            <div id="status2" class="status disconnected">Disconnected</div>
+            <div id="events2" class="events"></div>
+        </div>
+    </div>
+    
+    <div class="test-results">
+        <h3>Test Results</h3>
+        <div id="testResults">
+            <p>Connect both clients to start testing...</p>
+        </div>
+    </div>
+
+    <script>
+        class SSEClient {
+            constructor(clientId) {
+                this.clientId = clientId;
+                this.eventSource = null;
+                this.isConnected = false;
+                this.receivedEvents = [];
+                
+                this.streamIdInput = document.getElementById(`streamId${clientId}`);
+                this.connectBtn = document.getElementById(`connectBtn${clientId}`);
+                this.clearBtn = document.getElementById(`clearBtn${clientId}`);
+                this.statusDiv = document.getElementById(`status${clientId}`);
+                this.eventsDiv = document.getElementById(`events${clientId}`);
+                
+                this.setupEventListeners();
+            }
+            
+            setupEventListeners() {
+                this.connectBtn.addEventListener('click', () => {
+                    if (this.isConnected) {
+                        this.disconnect();
+                    } else {
+                        this.connect();
+                    }
+                });
+                
+                this.clearBtn.addEventListener('click', () => {
+                    this.eventsDiv.innerHTML = '';
+                    this.receivedEvents = [];
+                });
+            }
+            
+            connect() {
+                const streamId = this.streamIdInput.value.trim();
+                if (!streamId) {
+                    alert('Please enter a stream ID');
+                    return;
+                }
+                
+                this.updateStatus('connecting', 'Connecting...');
+                this.connectBtn.disabled = true;
+                
+                this.eventSource = new EventSource(`http://localhost:3000/sse/${encodeURIComponent(streamId)}`);
+                
+                this.eventSource.onopen = () => {
+                    this.updateStatus('connected', `Connected to: ${streamId}`);
+                    this.connectBtn.textContent = 'Disconnect';
+                    this.connectBtn.disabled = false;
+                    this.isConnected = true;
+                };
+                
+                this.eventSource.onmessage = (event) => {
+                    this.handleEvent(event.data);
+                };
+                
+                this.eventSource.onerror = () => {
+                    this.updateStatus('disconnected', 'Connection failed');
+                    this.disconnect();
+                };
+            }
+            
+            disconnect() {
+                if (this.eventSource) {
+                    this.eventSource.close();
+                    this.eventSource = null;
+                }
+                
+                this.updateStatus('disconnected', 'Disconnected');
+                this.connectBtn.textContent = 'Connect';
+                this.connectBtn.disabled = false;
+                this.isConnected = false;
+            }
+            
+            updateStatus(type, message) {
+                this.statusDiv.className = `status ${type}`;
+                this.statusDiv.textContent = message;
+            }
+            
+            handleEvent(data) {
+                try {
+                    const eventData = JSON.parse(data);
+                    this.receivedEvents.push({
+                        timestamp: new Date(),
+                        data: eventData
+                    });
+                    
+                    this.displayEvent(eventData);
+                    updateTestResults();
+                } catch (error) {
+                    console.error('Error parsing event:', error);
+                }
+            }
+            
+            displayEvent(eventData) {
+                const eventItem = document.createElement('div');
+                eventItem.className = 'event-item';
+                
+                const time = new Date().toLocaleTimeString();
+                
+                if (eventData.type === 'connected') {
+                    eventItem.innerHTML = `<strong>${time}</strong>: Connected to ${eventData.streamId}`;
+                    eventItem.style.borderLeftColor = '#28a745';
+                } else if (eventData.number !== undefined) {
+                    eventItem.innerHTML = `<strong>${time}</strong>: Number = ${eventData.number}`;
+                    eventItem.style.borderLeftColor = '#007bff';
+                } else {
+                    eventItem.innerHTML = `<strong>${time}</strong>: ${JSON.stringify(eventData)}`;
+                }
+                
+                this.eventsDiv.appendChild(eventItem);
+                this.eventsDiv.scrollTop = this.eventsDiv.scrollHeight;
+            }
+        }
+        
+        // Create two client instances
+        const client1 = new SSEClient(1);
+        const client2 = new SSEClient(2);
+        
+        function updateTestResults() {
+            const resultsDiv = document.getElementById('testResults');
+            
+            if (!client1.isConnected && !client2.isConnected) {
+                resultsDiv.innerHTML = '<p>Connect both clients to start testing...</p>';
+                return;
+            }
+            
+            let results = '<h4>Connection Status:</h4>';
+            results += `<p>Client 1: ${client1.isConnected ? '✅ Connected' : '❌ Disconnected'} (${client1.receivedEvents.length} events)</p>`;
+            results += `<p>Client 2: ${client2.isConnected ? '✅ Connected' : '❌ Disconnected'} (${client2.receivedEvents.length} events)</p>`;
+            
+            if (client1.isConnected && client2.isConnected) {
+                const stream1 = client1.streamIdInput.value;
+                const stream2 = client2.streamIdInput.value;
+                
+                if (stream1 === stream2) {
+                    results += '<h4>Same Stream Test:</h4>';
+                    results += `<p>Both clients connected to stream: <strong>${stream1}</strong></p>`;
+                    
+                    // Check if both clients are receiving similar events
+                    const client1Numbers = client1.receivedEvents
+                        .filter(e => e.data.number !== undefined)
+                        .map(e => e.data.number);
+                    const client2Numbers = client2.receivedEvents
+                        .filter(e => e.data.number !== undefined)
+                        .map(e => e.data.number);
+                    
+                    if (client1Numbers.length > 0 && client2Numbers.length > 0) {
+                        const lastClient1 = client1Numbers[client1Numbers.length - 1];
+                        const lastClient2 = client2Numbers[client2Numbers.length - 1];
+                        
+                        if (lastClient1 === lastClient2) {
+                            results += '<p>✅ Both clients receiving identical events</p>';
+                        } else {
+                            results += '<p>⚠️ Clients receiving different events (this might be normal due to timing)</p>';
+                        }
+                    }
+                } else {
+                    results += '<h4>Different Stream Test:</h4>';
+                    results += `<p>Client 1: <strong>${stream1}</strong>, Client 2: <strong>${stream2}</strong></p>';
+                    results += '<p>✅ Testing stream isolation</p>';
+                }
+            }
+            
+            resultsDiv.innerHTML = results;
+        }
+        
+        // Update test results every 2 seconds
+        setInterval(updateTestResults, 2000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "sse-proof-of-concept",
+  "version": "1.0.0",
+  "description": "A simple Server-Sent Events proof of concept with Node.js server and HTML frontend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "keywords": ["sse", "server-sent-events", "nodejs", "express"],
+  "author": "",
+  "license": "MIT"
+}

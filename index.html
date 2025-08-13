@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSE Proof of Concept</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .connection-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        #streamId {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        
+        #streamId:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        
+        #connectBtn {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            min-width: 100px;
+        }
+        
+        #connectBtn:hover {
+            background-color: #0056b3;
+        }
+        
+        #connectBtn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.connecting {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .events-section {
+            margin-top: 30px;
+        }
+        
+        .events-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        #clearBtn {
+            padding: 5px 15px;
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        #clearBtn:hover {
+            background-color: #545b62;
+        }
+        
+        #events {
+            height: 400px;
+            overflow-y: auto;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        
+        .event-item {
+            margin-bottom: 10px;
+            padding: 8px;
+            background-color: white;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .event-time {
+            color: #6c757d;
+            font-size: 12px;
+        }
+        
+        .event-data {
+            margin-top: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .event-number {
+            color: #007bff;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Server-Sent Events Proof of Concept</h1>
+        
+        <div class="connection-section">
+            <h3>Connection</h3>
+            <div class="input-group">
+                <input type="text" id="streamId" placeholder="Enter stream ID (e.g., test1)" />
+                <button id="connectBtn">Connect</button>
+            </div>
+            <div id="status" class="status disconnected">Disconnected</div>
+        </div>
+        
+        <div class="events-section">
+            <div class="events-header">
+                <h3>Events</h3>
+                <button id="clearBtn">Clear Events</button>
+            </div>
+            <div id="events"></div>
+        </div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        let isConnected = false;
+        
+        const streamIdInput = document.getElementById('streamId');
+        const connectBtn = document.getElementById('connectBtn');
+        const statusDiv = document.getElementById('status');
+        const eventsDiv = document.getElementById('events');
+        const clearBtn = document.getElementById('clearBtn');
+        
+        // Connect button event listener
+        connectBtn.addEventListener('click', () => {
+            if (isConnected) {
+                disconnect();
+            } else {
+                connect();
+            }
+        });
+        
+        // Clear events button
+        clearBtn.addEventListener('click', () => {
+            eventsDiv.innerHTML = '';
+        });
+        
+        // Enter key support for input field
+        streamIdInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !isConnected) {
+                connect();
+            }
+        });
+        
+        function connect() {
+            const streamId = streamIdInput.value.trim();
+            
+            if (!streamId) {
+                alert('Please enter a stream ID');
+                return;
+            }
+            
+            updateStatus('connecting', 'Connecting...');
+            connectBtn.disabled = true;
+            streamIdInput.disabled = true;
+            
+            // Create EventSource connection
+            eventSource = new EventSource(`http://localhost:3000/sse/${encodeURIComponent(streamId)}`);
+            
+            // Connection opened
+            eventSource.onopen = () => {
+                console.log('SSE connection opened');
+                updateStatus('connected', `Connected to stream: ${streamId}`);
+                connectBtn.textContent = 'Disconnect';
+                connectBtn.disabled = false;
+                isConnected = true;
+            };
+            
+            // Message received
+            eventSource.onmessage = (event) => {
+                console.log('Received event:', event.data);
+                handleIncomingEvent(event.data);
+            };
+            
+            // Connection error
+            eventSource.onerror = (error) => {
+                console.error('SSE connection error:', error);
+                
+                if (eventSource.readyState === EventSource.CONNECTING) {
+                    updateStatus('connecting', 'Reconnecting...');
+                } else {
+                    updateStatus('disconnected', 'Connection failed - Check if server is running');
+                    displayEvent({ 
+                        error: 'Connection failed', 
+                        message: 'Make sure the server is running on http://localhost:3000',
+                        timestamp: new Date().toISOString()
+                    });
+                    disconnect();
+                }
+            };
+        }
+        
+        function disconnect() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            
+            updateStatus('disconnected', 'Disconnected');
+            connectBtn.textContent = 'Connect';
+            connectBtn.disabled = false;
+            streamIdInput.disabled = false;
+            isConnected = false;
+        }
+        
+        function updateStatus(type, message) {
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+        }
+        
+        function handleIncomingEvent(data) {
+            try {
+                const eventData = JSON.parse(data);
+                displayEvent(eventData);
+            } catch (error) {
+                console.error('Error parsing event data:', error);
+                displayEvent({ error: 'Invalid event data', raw: data });
+            }
+        }
+        
+        function displayEvent(eventData) {
+            const eventItem = document.createElement('div');
+            eventItem.className = 'event-item';
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'event-time';
+            
+            // Use server timestamp if available, otherwise use local time
+            if (eventData.timestamp) {
+                const serverTime = new Date(eventData.timestamp);
+                timeDiv.textContent = `${serverTime.toLocaleTimeString()} (Server: ${eventData.id || 'unknown'})`;
+            } else {
+                timeDiv.textContent = new Date().toLocaleTimeString();
+            }
+            
+            const dataDiv = document.createElement('div');
+            dataDiv.className = 'event-data';
+            
+            if (eventData.type === 'connected') {
+                eventItem.style.borderLeftColor = '#28a745';
+                dataDiv.innerHTML = `<span style="color: #28a745;">✓ Connected to stream: ${eventData.streamId}</span>`;
+            } else if (eventData.number !== undefined) {
+                eventItem.style.borderLeftColor = '#007bff';
+                dataDiv.innerHTML = `Random Number: <span class="event-number">${eventData.number}</span>`;
+                
+                // Add some visual feedback for new numbers
+                eventItem.style.animation = 'fadeIn 0.3s ease-in';
+            } else if (eventData.error) {
+                eventItem.style.borderLeftColor = '#dc3545';
+                dataDiv.innerHTML = `<span style="color: #dc3545;">❌ ${eventData.error}</span>`;
+                if (eventData.message) {
+                    dataDiv.innerHTML += `<br><small>${eventData.message}</small>`;
+                }
+            } else {
+                eventItem.style.borderLeftColor = '#6c757d';
+                dataDiv.innerHTML = `<pre style="margin: 0; white-space: pre-wrap;">${JSON.stringify(eventData, null, 2)}</pre>`;
+            }
+            
+            eventItem.appendChild(timeDiv);
+            eventItem.appendChild(dataDiv);
+            
+            eventsDiv.appendChild(eventItem);
+            eventsDiv.scrollTop = eventsDiv.scrollHeight;
+            
+            // Limit the number of displayed events to prevent memory issues
+            const maxEvents = 100;
+            while (eventsDiv.children.length > maxEvents) {
+                eventsDiv.removeChild(eventsDiv.firstChild);
+            }
+        }
+        
+        // Add CSS animation for new events
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(-10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Add connection status indicators
+        function addConnectionStatusIndicator() {
+            const indicator = document.createElement('div');
+            indicator.id = 'connectionIndicator';
+            indicator.style.cssText = `
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                background-color: #dc3545;
+                z-index: 1000;
+                transition: background-color 0.3s ease;
+            `;
+            document.body.appendChild(indicator);
+            return indicator;
+        }
+        
+        const connectionIndicator = addConnectionStatusIndicator();
+        
+        // Update connection indicator
+        function updateConnectionIndicator(status) {
+            const colors = {
+                'disconnected': '#dc3545',
+                'connecting': '#ffc107', 
+                'connected': '#28a745'
+            };
+            connectionIndicator.style.backgroundColor = colors[status] || '#6c757d';
+        }
+        
+        // Override updateStatus to also update indicator
+        const originalUpdateStatus = updateStatus;
+        updateStatus = function(type, message) {
+            originalUpdateStatus(type, message);
+            updateConnectionIndicator(type);
+        };
+    </script>
+</body>
+</html>
