@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SSE Proof of Concept</title>
+    <title>Real-Time Transcript with Sentiment Analysis</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -12,20 +13,20 @@
             padding: 20px;
             background-color: #f5f5f5;
         }
-        
+
         .container {
             background-color: white;
             padding: 30px;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
-        
+
         h1 {
             color: #333;
             text-align: center;
             margin-bottom: 30px;
         }
-        
+
         .connection-section {
             margin-bottom: 30px;
             padding: 20px;
@@ -33,13 +34,13 @@
             border-radius: 6px;
             border: 1px solid #e9ecef;
         }
-        
+
         .input-group {
             display: flex;
             gap: 10px;
             margin-bottom: 15px;
         }
-        
+
         #streamId {
             flex: 1;
             padding: 10px;
@@ -47,12 +48,12 @@
             border-radius: 4px;
             font-size: 16px;
         }
-        
+
         #streamId:focus {
             outline: none;
             border-color: #007bff;
         }
-        
+
         #connectBtn {
             padding: 10px 20px;
             background-color: #007bff;
@@ -63,52 +64,111 @@
             font-size: 16px;
             min-width: 100px;
         }
-        
+
         #connectBtn:hover {
             background-color: #0056b3;
         }
-        
+
         #connectBtn:disabled {
             background-color: #6c757d;
             cursor: not-allowed;
         }
-        
+
         .status {
             padding: 10px;
             border-radius: 4px;
             margin-bottom: 15px;
             font-weight: bold;
         }
-        
+
         .status.disconnected {
             background-color: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
-        
+
         .status.connecting {
             background-color: #fff3cd;
             color: #856404;
             border: 1px solid #ffeaa7;
         }
-        
+
         .status.connected {
             background-color: #d4edda;
             color: #155724;
             border: 1px solid #c3e6cb;
         }
-        
-        .events-section {
+
+        .transcript-section {
             margin-top: 30px;
         }
-        
-        .events-header {
+
+        .transcript-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 15px;
         }
         
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .toggle-container {
+            display: flex;
+            align-items: center;
+        }
+        
+        .toggle-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+            font-size: 14px;
+            color: #495057;
+        }
+        
+        .toggle-label input[type="checkbox"] {
+            display: none;
+        }
+        
+        .toggle-slider {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background-color: #ccc;
+            border-radius: 24px;
+            transition: background-color 0.3s;
+            margin-right: 8px;
+        }
+        
+        .toggle-slider:before {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: white;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .toggle-label input[type="checkbox"]:checked + .toggle-slider {
+            background-color: #007bff;
+        }
+        
+        .toggle-label input[type="checkbox"]:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+        
+        .toggle-text {
+            font-weight: 500;
+        }
+
         #clearBtn {
             padding: 5px 15px;
             background-color: #6c757d;
@@ -117,79 +177,393 @@
             border-radius: 4px;
             cursor: pointer;
         }
-        
+
         #clearBtn:hover {
             background-color: #545b62;
         }
-        
-        #events {
-            height: 400px;
+
+        #transcript {
+            height: 500px;
             overflow-y: auto;
             border: 2px solid #ddd;
-            border-radius: 4px;
+            border-radius: 8px;
+            padding: 20px;
+            background: linear-gradient(to bottom, #f8f9fa, #ffffff);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .transcript-entry {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .transcript-entry.agent {
+            justify-content: flex-end;
+        }
+
+        .transcript-entry.customer {
+            justify-content: flex-start;
+        }
+
+        .message-bubble {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            position: relative;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .message-bubble.agent {
+            background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+            color: #1565c0;
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message-bubble.customer {
+            background: linear-gradient(135deg, #f3e5f5, #e1bee7);
+            color: #7b1fa2;
+            margin-right: auto;
+            border-bottom-left-radius: 4px;
+        }
+
+        .speaker-label {
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 4px;
+            opacity: 0.8;
+        }
+
+        .message-text {
+            margin-bottom: 6px;
+        }
+
+        .message-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            opacity: 0.7;
+        }
+
+        .timestamp {
+            color: inherit;
+        }
+
+        .sentiment-indicator {
+            font-size: 16px;
+            margin-left: 8px;
+        }
+
+        .sentiment-positive {
+            color: #4caf50;
+        }
+
+        .sentiment-negative {
+            color: #f44336;
+        }
+
+        .sentiment-neutral {
+            color: #ff9800;
+        }
+
+        .connection-status {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: #e8f5e8;
+            border: 1px solid #c8e6c9;
+            border-radius: 12px;
+            color: #2e7d32;
+            font-size: 13px;
+            text-align: center;
+            font-style: italic;
+        }
+        
+        .typing-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1em;
+            background-color: currentColor;
+            margin-left: 2px;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        
+        .message-text.typing {
+            position: relative;
+        }
+
+        .call-summary {
+            margin-top: 30px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border: 2px solid #007bff;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0, 123, 255, 0.1);
+            animation: summarySlideIn 0.5s ease-out;
+        }
+
+        .summary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .summary-header h3 {
+            margin: 0;
+            color: #007bff;
+            font-size: 24px;
+        }
+
+        .summary-timestamp {
+            color: #6c757d;
+            font-size: 14px;
+            font-style: italic;
+        }
+
+        .summary-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .summary-item {
+            background: white;
             padding: 15px;
-            background-color: #f8f9fa;
-            font-family: 'Courier New', monospace;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+
+        .summary-label {
+            font-weight: bold;
+            color: #495057;
+            display: block;
+            margin-bottom: 5px;
             font-size: 14px;
         }
-        
-        .event-item {
-            margin-bottom: 10px;
-            padding: 8px;
-            background-color: white;
-            border-radius: 4px;
-            border-left: 4px solid #007bff;
-        }
-        
-        .event-time {
-            color: #6c757d;
-            font-size: 12px;
-        }
-        
-        .event-data {
-            margin-top: 5px;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .event-number {
+
+        .summary-value {
             color: #007bff;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .summary-section {
+            margin-bottom: 25px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+
+        .summary-section h4 {
+            margin: 0 0 15px 0;
+            color: #495057;
             font-size: 18px;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 8px;
+        }
+
+        .summary-section ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .summary-section li {
+            margin-bottom: 8px;
+            color: #495057;
+            line-height: 1.5;
+        }
+
+        .sentiment-breakdown {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .sentiment-stat {
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+            min-width: 100px;
+            flex: 1;
+        }
+
+        .sentiment-stat.positive {
+            background: linear-gradient(135deg, #d4edda, #c3e6cb);
+            border: 1px solid #28a745;
+        }
+
+        .sentiment-stat.neutral {
+            background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+            border: 1px solid #ffc107;
+        }
+
+        .sentiment-stat.negative {
+            background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+            border: 1px solid #dc3545;
+        }
+
+        .sentiment-emoji {
+            display: block;
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .sentiment-count {
+            display: block;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .sentiment-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        .overall-sentiment {
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+        }
+
+        @keyframes summarySlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px) scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
-        <h1>Server-Sent Events Proof of Concept</h1>
-        
+        <h1>Real-Time Transcript with Sentiment Analysis</h1>
+
         <div class="connection-section">
             <h3>Connection</h3>
             <div class="input-group">
-                <input type="text" id="streamId" placeholder="Enter stream ID (e.g., test1)" />
+                <input type="text" id="streamId" placeholder="Enter session ID (e.g., call-123)" />
                 <button id="connectBtn">Connect</button>
             </div>
             <div id="status" class="status disconnected">Disconnected</div>
         </div>
-        
-        <div class="events-section">
-            <div class="events-header">
-                <h3>Events</h3>
-                <button id="clearBtn">Clear Events</button>
+
+        <div class="transcript-section">
+            <div class="transcript-header">
+                <h3>Live Transcript</h3>
+                <div class="header-controls">
+                    <div class="toggle-container">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="typingToggle" checked>
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-text">Typing Animation</span>
+                        </label>
+                    </div>
+                    <button id="clearBtn">Clear Transcript</button>
+                </div>
             </div>
-            <div id="events"></div>
+            <div id="transcript"></div>
+        </div>
+
+        <div id="callSummary" class="call-summary" style="display: none;">
+            <div class="summary-header">
+                <h3>📋 Call Summary</h3>
+                <div class="summary-timestamp"></div>
+            </div>
+            <div class="summary-content">
+                <div class="summary-overview">
+                    <div class="summary-item">
+                        <span class="summary-label">Duration:</span>
+                        <span class="summary-value" id="summaryDuration"></span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Resolution:</span>
+                        <span class="summary-value" id="summaryResolution"></span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Customer Satisfaction:</span>
+                        <span class="summary-value" id="summarySatisfaction"></span>
+                    </div>
+                </div>
+
+                <div class="summary-section">
+                    <h4>Key Points</h4>
+                    <ul id="summaryKeyPoints"></ul>
+                </div>
+
+                <div class="summary-section">
+                    <h4>Sentiment Analysis</h4>
+                    <div class="sentiment-breakdown">
+                        <div class="sentiment-stat positive">
+                            <span class="sentiment-emoji">😊</span>
+                            <span class="sentiment-count" id="positiveCount"></span>
+                            <span class="sentiment-label">Positive</span>
+                        </div>
+                        <div class="sentiment-stat neutral">
+                            <span class="sentiment-emoji">😐</span>
+                            <span class="sentiment-count" id="neutralCount"></span>
+                            <span class="sentiment-label">Neutral</span>
+                        </div>
+                        <div class="sentiment-stat negative">
+                            <span class="sentiment-emoji">😞</span>
+                            <span class="sentiment-count" id="negativeCount"></span>
+                            <span class="sentiment-label">Negative</span>
+                        </div>
+                    </div>
+                    <div class="overall-sentiment">
+                        Overall: <span id="overallSentiment"></span>
+                    </div>
+                </div>
+
+                <div class="summary-section">
+                    <h4>Next Actions</h4>
+                    <ul id="summaryNextActions"></ul>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
         let eventSource = null;
         let isConnected = false;
-        
+        let summaryReceived = false;
         const streamIdInput = document.getElementById('streamId');
         const connectBtn = document.getElementById('connectBtn');
         const statusDiv = document.getElementById('status');
-        const eventsDiv = document.getElementById('events');
+        const transcriptDiv = document.getElementById('transcript');
         const clearBtn = document.getElementById('clearBtn');
+        const typingToggle = document.getElementById('typingToggle');
         
+        // Initialize animation state based on checkbox state
+        let typingAnimationEnabled = typingToggle.checked;
+
         // Connect button event listener
         connectBtn.addEventListener('click', () => {
             if (isConnected) {
@@ -198,34 +572,45 @@
                 connect();
             }
         });
-        
-        // Clear events button
+
+        // Clear transcript button
         clearBtn.addEventListener('click', () => {
-            eventsDiv.innerHTML = '';
+            transcriptDiv.innerHTML = '';
+            // Also hide the call summary
+            const callSummaryDiv = document.getElementById('callSummary');
+            callSummaryDiv.style.display = 'none';
         });
         
+        // Typing animation toggle
+        typingToggle.addEventListener('change', (e) => {
+            typingAnimationEnabled = e.target.checked;
+        });
+
         // Enter key support for input field
         streamIdInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !isConnected) {
                 connect();
             }
         });
-        
+
         function connect() {
             const streamId = streamIdInput.value.trim();
-            
+
             if (!streamId) {
                 alert('Please enter a stream ID');
                 return;
             }
+
+            // Reset summary flag for new connection
+            summaryReceived = false;
             
             updateStatus('connecting', 'Connecting...');
             connectBtn.disabled = true;
             streamIdInput.disabled = true;
-            
+
             // Create EventSource connection
             eventSource = new EventSource(`http://localhost:3000/sse/${encodeURIComponent(streamId)}`);
-            
+
             // Connection opened
             eventSource.onopen = () => {
                 console.log('SSE connection opened');
@@ -234,120 +619,287 @@
                 connectBtn.disabled = false;
                 isConnected = true;
             };
-            
+
             // Message received
             eventSource.onmessage = (event) => {
                 console.log('Received event:', event.data);
-                handleIncomingEvent(event.data);
+                handleIncomingTranscript(event.data);
             };
-            
+
             // Connection error
             eventSource.onerror = (error) => {
                 console.error('SSE connection error:', error);
-                
+
+                // If we received a summary, this is an expected disconnection
+                if (summaryReceived) {
+                    console.log('Expected disconnection after summary received');
+                    return;
+                }
+
                 if (eventSource.readyState === EventSource.CONNECTING) {
                     updateStatus('connecting', 'Reconnecting...');
                 } else {
                     updateStatus('disconnected', 'Connection failed - Check if server is running');
-                    displayEvent({ 
-                        error: 'Connection failed', 
-                        message: 'Make sure the server is running on http://localhost:3000',
-                        timestamp: new Date().toISOString()
-                    });
+                    displayConnectionMessage('Connection failed - Make sure the server is running on http://localhost:3000');
                     disconnect();
                 }
             };
         }
-        
+
         function disconnect() {
             if (eventSource) {
                 eventSource.close();
                 eventSource = null;
             }
-            
+
             updateStatus('disconnected', 'Disconnected');
             connectBtn.textContent = 'Connect';
             connectBtn.disabled = false;
             streamIdInput.disabled = false;
             isConnected = false;
+            summaryReceived = false; // Reset for next connection
         }
-        
+
         function updateStatus(type, message) {
             statusDiv.className = `status ${type}`;
             statusDiv.textContent = message;
         }
-        
-        function handleIncomingEvent(data) {
+
+        function handleIncomingTranscript(data) {
             try {
-                const eventData = JSON.parse(data);
-                displayEvent(eventData);
-            } catch (error) {
-                console.error('Error parsing event data:', error);
-                displayEvent({ error: 'Invalid event data', raw: data });
-            }
-        }
-        
-        function displayEvent(eventData) {
-            const eventItem = document.createElement('div');
-            eventItem.className = 'event-item';
-            
-            const timeDiv = document.createElement('div');
-            timeDiv.className = 'event-time';
-            
-            // Use server timestamp if available, otherwise use local time
-            if (eventData.timestamp) {
-                const serverTime = new Date(eventData.timestamp);
-                timeDiv.textContent = `${serverTime.toLocaleTimeString()} (Server: ${eventData.id || 'unknown'})`;
-            } else {
-                timeDiv.textContent = new Date().toLocaleTimeString();
-            }
-            
-            const dataDiv = document.createElement('div');
-            dataDiv.className = 'event-data';
-            
-            if (eventData.type === 'connected') {
-                eventItem.style.borderLeftColor = '#28a745';
-                dataDiv.innerHTML = `<span style="color: #28a745;">✓ Connected to stream: ${eventData.streamId}</span>`;
-            } else if (eventData.number !== undefined) {
-                eventItem.style.borderLeftColor = '#007bff';
-                dataDiv.innerHTML = `Random Number: <span class="event-number">${eventData.number}</span>`;
-                
-                // Add some visual feedback for new numbers
-                eventItem.style.animation = 'fadeIn 0.3s ease-in';
-            } else if (eventData.error) {
-                eventItem.style.borderLeftColor = '#dc3545';
-                dataDiv.innerHTML = `<span style="color: #dc3545;">❌ ${eventData.error}</span>`;
-                if (eventData.message) {
-                    dataDiv.innerHTML += `<br><small>${eventData.message}</small>`;
+                const transcriptData = JSON.parse(data);
+                if (transcriptData.type === 'connected') {
+                    displayConnectionMessage(`Connected to stream: ${transcriptData.streamId}`);
+                } else if (transcriptData.type === 'transcript') {
+                    displayTranscriptEntry(transcriptData);
+                } else if (transcriptData.type === 'summary') {
+                    summaryReceived = true;
+                    displayCallSummary(transcriptData.summary);
+                    // Properly disconnect after receiving summary
+                    setTimeout(() => {
+                        disconnect();
+                        updateStatus('disconnected', 'Call completed - Summary generated');
+                    }, 1000);
                 }
-            } else {
-                eventItem.style.borderLeftColor = '#6c757d';
-                dataDiv.innerHTML = `<pre style="margin: 0; white-space: pre-wrap;">${JSON.stringify(eventData, null, 2)}</pre>`;
-            }
-            
-            eventItem.appendChild(timeDiv);
-            eventItem.appendChild(dataDiv);
-            
-            eventsDiv.appendChild(eventItem);
-            eventsDiv.scrollTop = eventsDiv.scrollHeight;
-            
-            // Limit the number of displayed events to prevent memory issues
-            const maxEvents = 100;
-            while (eventsDiv.children.length > maxEvents) {
-                eventsDiv.removeChild(eventsDiv.firstChild);
+            } catch (error) {
+                console.error('Error parsing transcript data:', error);
+                displayConnectionMessage('Error: Invalid transcript data received');
             }
         }
-        
-        // Add CSS animation for new events
+
+        function displayConnectionMessage(message) {
+            const connectionDiv = document.createElement('div');
+            connectionDiv.className = 'connection-status';
+            connectionDiv.textContent = message;
+
+            transcriptDiv.appendChild(connectionDiv);
+            transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
+        }
+
+        function displayTranscriptEntry(data) {
+            const entryDiv = document.createElement('div');
+            entryDiv.className = `transcript-entry ${data.speaker.toLowerCase()}`;
+
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = `message-bubble ${data.speaker.toLowerCase()}`;
+
+            const speakerDiv = document.createElement('div');
+            speakerDiv.className = 'speaker-label';
+            speakerDiv.textContent = data.speaker;
+
+            const textDiv = document.createElement('div');
+            textDiv.className = 'message-text typing';
+
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'message-meta';
+
+            const timestampSpan = document.createElement('span');
+            timestampSpan.className = 'timestamp';
+            const time = new Date(data.timestamp);
+            timestampSpan.textContent = time.toLocaleTimeString();
+
+            const sentimentSpan = document.createElement('span');
+            sentimentSpan.className = `sentiment-indicator sentiment-${data.sentiment}`;
+
+            // Set sentiment emoji based on sentiment
+            switch (data.sentiment) {
+                case 'positive':
+                    sentimentSpan.textContent = '😊';
+                    break;
+                case 'negative':
+                    sentimentSpan.textContent = '😞';
+                    break;
+                case 'neutral':
+                default:
+                    sentimentSpan.textContent = '😐';
+                    break;
+            }
+
+            metaDiv.appendChild(timestampSpan);
+            metaDiv.appendChild(sentimentSpan);
+
+            bubbleDiv.appendChild(speakerDiv);
+            bubbleDiv.appendChild(textDiv);
+            bubbleDiv.appendChild(metaDiv);
+
+            entryDiv.appendChild(bubbleDiv);
+            transcriptDiv.appendChild(entryDiv);
+
+            // Display text based on toggle setting
+            if (typingAnimationEnabled) {
+                // Start typing animation
+                typeText(textDiv, data.text, () => {
+                    // Remove typing class and cursor when done
+                    textDiv.classList.remove('typing');
+                    const cursor = textDiv.querySelector('.typing-cursor');
+                    if (cursor) {
+                        cursor.remove();
+                    }
+                });
+            } else {
+                // Display text immediately
+                textDiv.classList.remove('typing');
+                textDiv.textContent = data.text;
+            }
+
+            // Auto-scroll to bottom
+            transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
+
+            // Limit the number of displayed entries to prevent memory issues
+            const maxEntries = 50;
+            while (transcriptDiv.children.length > maxEntries) {
+                // Don't remove connection status messages
+                const firstChild = transcriptDiv.firstChild;
+                if (!firstChild.classList.contains('connection-status')) {
+                    transcriptDiv.removeChild(firstChild);
+                } else if (transcriptDiv.children.length > maxEntries + 5) {
+                    // Remove even connection messages if we have too many
+                    transcriptDiv.removeChild(firstChild);
+                } else {
+                    break;
+                }
+            }
+        }
+
+        function typeText(element, text, callback) {
+            // Add typing cursor
+            const cursor = document.createElement('span');
+            cursor.className = 'typing-cursor';
+            element.appendChild(cursor);
+
+            let index = 0;
+            let currentText = '';
+
+            function typeNextChar() {
+                if (index < text.length) {
+                    currentText += text[index];
+                    
+                    // Update text content (keeping cursor at the end)
+                    element.textContent = currentText;
+                    element.appendChild(cursor);
+                    
+                    // Auto-scroll to keep the typing in view
+                    transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
+                    
+                    index++;
+                    
+                    // Fast and smooth typing - vary speed slightly for natural feel
+                    let delay = 30; // Base speed: 30ms per character
+                    
+                    // Add slight pauses after punctuation for natural rhythm
+                    if (text[index - 1] === '.' || text[index - 1] === '!' || text[index - 1] === '?') {
+                        delay = 150;
+                    } else if (text[index - 1] === ',' || text[index - 1] === ';') {
+                        delay = 80;
+                    } else if (text[index - 1] === ' ') {
+                        delay = 40; // Slightly slower for spaces
+                    }
+                    
+                    // Add tiny random variation for natural feel
+                    delay += Math.random() * 20 - 10; // ±10ms variation
+                    
+                    setTimeout(typeNextChar, Math.max(15, delay)); // Minimum 15ms
+                } else {
+                    // Typing complete
+                    if (callback) callback();
+                }
+            }
+
+            // Start typing immediately for faster feel
+            setTimeout(typeNextChar, 50);
+        }
+
+        function displayCallSummary(summaryData) {
+            const callSummaryDiv = document.getElementById('callSummary');
+
+            // Update timestamp
+            const timestampDiv = callSummaryDiv.querySelector('.summary-timestamp');
+            timestampDiv.textContent = `Generated at ${new Date().toLocaleString()}`;
+
+            // Update overview data
+            document.getElementById('summaryDuration').textContent = summaryData.duration;
+            document.getElementById('summaryResolution').textContent = summaryData.resolution;
+            document.getElementById('summarySatisfaction').textContent = summaryData.customerSatisfaction;
+
+            // Update key points
+            const keyPointsList = document.getElementById('summaryKeyPoints');
+            keyPointsList.innerHTML = '';
+            summaryData.keyPoints.forEach(point => {
+                const li = document.createElement('li');
+                li.textContent = point;
+                keyPointsList.appendChild(li);
+            });
+
+            // Update sentiment analysis
+            document.getElementById('positiveCount').textContent = summaryData.sentimentAnalysis.positive;
+            document.getElementById('neutralCount').textContent = summaryData.sentimentAnalysis.neutral;
+            document.getElementById('negativeCount').textContent = summaryData.sentimentAnalysis.negative;
+            document.getElementById('overallSentiment').textContent = summaryData.sentimentAnalysis.overall;
+
+            // Update next actions
+            const nextActionsList = document.getElementById('summaryNextActions');
+            nextActionsList.innerHTML = '';
+            summaryData.nextActions.forEach(action => {
+                const li = document.createElement('li');
+                li.textContent = action;
+                nextActionsList.appendChild(li);
+            });
+
+            // Show the summary widget
+            callSummaryDiv.style.display = 'block';
+
+            // Scroll to summary
+            setTimeout(() => {
+                callSummaryDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+
+        // Add CSS animations for transcript entries
         const style = document.createElement('style');
         style.textContent = `
-            @keyframes fadeIn {
-                from { opacity: 0; transform: translateY(-10px); }
-                to { opacity: 1; transform: translateY(0); }
+            @keyframes slideIn {
+                from { 
+                    opacity: 0; 
+                    transform: translateY(20px) scale(0.95); 
+                }
+                to { 
+                    opacity: 1; 
+                    transform: translateY(0) scale(1); 
+                }
+            }
+            
+            @keyframes pulse {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+                100% { transform: scale(1); }
+            }
+            
+            .message-bubble:hover {
+                animation: pulse 0.3s ease-in-out;
             }
         `;
         document.head.appendChild(style);
-        
+
         // Add connection status indicators
         function addConnectionStatusIndicator() {
             const indicator = document.createElement('div');
@@ -366,25 +918,26 @@
             document.body.appendChild(indicator);
             return indicator;
         }
-        
+
         const connectionIndicator = addConnectionStatusIndicator();
-        
+
         // Update connection indicator
         function updateConnectionIndicator(status) {
             const colors = {
                 'disconnected': '#dc3545',
-                'connecting': '#ffc107', 
+                'connecting': '#ffc107',
                 'connected': '#28a745'
             };
             connectionIndicator.style.backgroundColor = colors[status] || '#6c757d';
         }
-        
+
         // Override updateStatus to also update indicator
         const originalUpdateStatus = updateStatus;
-        updateStatus = function(type, message) {
+        updateStatus = function (type, message) {
             originalUpdateStatus(type, message);
             updateConnectionIndicator(type);
         };
     </script>
 </body>
+
 </html>

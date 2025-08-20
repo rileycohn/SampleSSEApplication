@@ -93,15 +93,73 @@ app.get('/sse/:id', (req, res) => {
   }
 });
 
-// Random number generator function
-function generateRandomNumber() {
-  return Math.floor(Math.random() * 1000) + 1;
+// Mock transcript data with sentiment
+const mockTranscriptData = [
+  { text: "Hello, welcome to our customer service. How can I help you today?", speaker: "Agent", sentiment: "positive" },
+  { text: "Hi, I'm having trouble with my recent order. It hasn't arrived yet.", speaker: "Customer", sentiment: "negative" },
+  { text: "I'm sorry to hear that. Let me look up your order details right away.", speaker: "Agent", sentiment: "neutral" },
+  { text: "Thank you, I really appreciate your help with this.", speaker: "Customer", sentiment: "positive" },
+  { text: "I found your order. It looks like there was a delay in shipping.", speaker: "Agent", sentiment: "neutral" },
+  { text: "That's frustrating. When will it actually arrive?", speaker: "Customer", sentiment: "negative" },
+  { text: "I can see it's now out for delivery and should arrive today by 6 PM.", speaker: "Agent", sentiment: "positive" },
+  { text: "Oh wonderful! That's much better than I expected.", speaker: "Customer", sentiment: "positive" },
+  { text: "I'm also adding a discount to your account for the inconvenience.", speaker: "Agent", sentiment: "positive" },
+  { text: "You've been incredibly helpful. Thank you so much!", speaker: "Customer", sentiment: "positive" },
+  { text: "My pleasure! Is there anything else I can help you with today?", speaker: "Agent", sentiment: "positive" },
+  { text: "No, that covers everything. Have a great day!", speaker: "Customer", sentiment: "positive" }
+];
+
+let transcriptIndex = 0;
+
+// Generate mock transcript entry
+function generateTranscriptEntry() {
+  const entry = mockTranscriptData[transcriptIndex % mockTranscriptData.length];
+  transcriptIndex++;
+  
+  return {
+    ...entry,
+    timestamp: new Date().toISOString(),
+    id: transcriptIndex
+  };
+}
+
+// Generate call summary
+function generateCallSummary() {
+  return {
+    type: "summary",
+    summary: {
+      duration: "8 minutes 45 seconds",
+      totalMessages: mockTranscriptData.length,
+      resolution: "Order delivery issue resolved successfully",
+      customerSatisfaction: "High",
+      keyPoints: [
+        "Customer reported delayed order delivery",
+        "Agent located order and identified shipping delay",
+        "Order confirmed for same-day delivery by 6 PM",
+        "Discount applied to customer account for inconvenience",
+        "Customer expressed satisfaction with resolution"
+      ],
+      sentimentAnalysis: {
+        positive: 7,
+        neutral: 3,
+        negative: 2,
+        overall: "Positive"
+      },
+      nextActions: [
+        "Monitor delivery completion",
+        "Follow up with customer if needed"
+      ]
+    },
+    timestamp: new Date().toISOString()
+  };
 }
 
 // Event generation function
 function startEventGeneration(streamId) {
   const stream = activeStreams.get(streamId);
   if (!stream) return;
+  
+  let messageCount = 0;
   
   stream.interval = setInterval(() => {
     // Check if stream still has clients
@@ -112,14 +170,53 @@ function startEventGeneration(streamId) {
       return;
     }
     
-    // Generate event data
+    // Check if we've sent all transcript messages
+    if (messageCount >= mockTranscriptData.length) {
+      console.log(`📋 Sending call summary for stream ${streamId}`);
+      
+      // Send summary
+      const summaryData = generateCallSummary();
+      summaryData.streamId = streamId;
+      const summaryMessage = `data: ${JSON.stringify(summaryData)}\n\n`;
+      
+      // Send summary to all clients
+      stream.clients.forEach(client => {
+        try {
+          client.write(summaryMessage);
+        } catch (error) {
+          console.log(`Error sending summary to client in stream ${streamId}`);
+        }
+      });
+      
+      // Close connections after a brief delay
+      setTimeout(() => {
+        console.log(`🔌 Closing connections for stream ${streamId} after summary`);
+        stream.clients.forEach(client => {
+          try {
+            client.end();
+          } catch (error) {
+            console.log(`Error closing client connection in stream ${streamId}`);
+          }
+        });
+        
+        // Clean up stream
+        clearInterval(stream.interval);
+        activeStreams.delete(streamId);
+      }, 1000);
+      
+      return;
+    }
+    
+    // Generate transcript data
     const eventData = {
-      number: generateRandomNumber(),
-      timestamp: new Date().toISOString(),
-      id: streamId
+      type: "transcript",
+      ...generateTranscriptEntry(),
+      streamId: streamId
     };
     
-    console.log(`📨 Broadcasting to stream ${streamId} (${stream.clients.length} clients): Random number ${eventData.number}`);
+    messageCount++;
+    
+    console.log(`📨 Broadcasting to stream ${streamId} (${stream.clients.length} clients): ${eventData.speaker}: "${eventData.text}" (${eventData.sentiment})`);
     
     // Send event to all clients in this stream
     const message = `data: ${JSON.stringify(eventData)}\n\n`;
@@ -141,7 +238,7 @@ function startEventGeneration(streamId) {
       clearInterval(stream.interval);
       activeStreams.delete(streamId);
     }
-  }, 10000); // 10 seconds interval
+  }, 3000); // 3 seconds interval for more realistic transcript timing
 }
 
 // Start server
